@@ -141,6 +141,7 @@ input.bad{border-color:var(--bad)!important}
   padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px))}
 @media (min-width:640px){.overlay{align-items:center}.sheet{border-radius:16px;max-height:86%}}
 .sheet h3{margin:0 0 12px;font-size:18px}
+.sheet h4{margin:20px 0 6px;font-size:15px;padding-top:14px;border-top:1px solid var(--line)}
 .sheet label.f{display:block;margin-bottom:12px}
 .sheet label.f>span{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
 .sheet .row{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px}
@@ -545,14 +546,24 @@ function itemSheet(itemId){
     for(const s of curSections())for(const r of s.rows)if(r.id===itemId)name=s.title+' - '+r.name;
     const list=curBudget().transactions.filter(t=>t.item_id===itemId).sort((x,y)=>y.date.localeCompare(x.date));
     const total=list.reduce((n,t)=>n+t.amount,0);
+    const pool=[...data.untracked].sort((x,y)=>y.date.localeCompare(x.date));
     return h('div',null,h('h3',null,name),
-      h('p',{class:'msg num'},`${list.length} transaction(s)  ·  Actual ${money(round2(total))}`),
+      h('p',{class:'msg num'},`${list.length} transaction(s)  \u00B7  Actual ${money(round2(total))}`),
       list.length?list.map(t=>h('div',{class:'txn',style:'margin-bottom:8px'},
         h('button',{class:'main',style:'padding-left:12px',onclick:()=>editTxn(t.id)},
           h('span',{class:'l'},h('span',{class:'d'},t.description||'(no description)'),h('span',{class:'m'},fmtDate(t.date))),
           h('span',{class:'a num'},money(t.amount))))):h('div',{class:'empty'},'No transactions under this item yet.'),
       h('div',{class:'row'},h('button',{class:'btn',onclick:()=>close()},'Close'),
-        h('button',{class:'btn primary',onclick:()=>addTxn(itemId)},'+ Add transaction')));},{live:true,noFocus:true});}
+        h('button',{class:'btn primary',onclick:()=>addTxn(itemId)},'+ Add transaction')),
+      h('h4',null,`Outstanding transactions (${pool.length})`),
+      pool.length?h('p',{class:'msg'},'Tap Add to put one into this item.'):null,
+      pool.length?pool.map(t=>h('div',{class:'txn un',style:'margin-bottom:8px'},
+        h('div',{class:'main',style:'padding-left:12px;cursor:default'},
+          h('span',{class:'l'},h('span',{class:'d'},t.description||'(no description)'),
+            h('span',{class:'m'},fmtDate(t.date)+(t.category?'  \u00B7  '+t.category:''))),
+          h('span',{class:'a num'},money(t.amount))),
+        h('button',{class:'btn small',style:'align-self:center;margin:0 10px',onclick:()=>{placeTxn(t,data.current,itemId);markDirty();render();}},'Add'))):
+        h('div',{class:'empty'},'Nothing outstanding. Upload a bank CSV on the Transactions tab to bring some in.'));},{live:true,noFocus:true});}
 
 /* ===== sections & items ===== */
 async function addSection(){
