@@ -75,7 +75,7 @@ main{padding-top:14px;padding-bottom:140px}
 .pill{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;padding:3px 8px;border-radius:99px;background:var(--field);color:var(--muted);border:1px solid var(--line)}
 .item{padding:12px 0 4px;border-top:1px solid var(--line);margin-top:10px}
 .item-top{display:flex;gap:8px;align-items:center}
-.nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px}
+.nums{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.5fr) minmax(0,1fr);gap:8px;margin-top:8px}
 .nums>*{min-width:0}
 .k{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:2px}
 .v{display:block;padding:9px 0;font-weight:600}
@@ -91,6 +91,10 @@ input.bad{border-color:var(--bad)!important}
 .sec-foot .tot{flex-basis:100%;font-size:13px;color:var(--muted)}
 .sec-foot .tot b{color:var(--text)}
 .x{background:none;border:0;color:var(--muted);font-size:22px;line-height:1;padding:6px 8px;cursor:pointer;border-radius:8px}
+.addrow{display:flex;gap:10px;margin-bottom:14px}.addrow .addbar{flex:1;width:auto;margin-bottom:0}.optbtn{padding:0 16px}
+.actrow{display:flex;align-items:center;flex-wrap:nowrap;gap:6px}.actrow .v{white-space:nowrap}.actrow .v{padding:5px 0}
+.iconbtn{background:var(--field);border:1px solid var(--line);border-radius:8px;width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;color:var(--accent);cursor:pointer;padding:0;flex:none}
+.ico{display:inline-flex}.ico svg{display:block}
 .addbar{display:block;width:100%;border:2px dashed var(--line);background:none;color:var(--accent);border-radius:12px;padding:14px;font-weight:600;cursor:pointer;margin-bottom:14px}
 
 /* transactions */
@@ -171,7 +175,6 @@ body{margin:0}img{max-width:100%}[hidden]{display:none!important}
       <div class="monthrow">
         <select id="monthSel" aria-label="Budget month"></select>
         <button class="btn navy" id="btnNew" aria-label="New month">+ New</button>
-        <button class="btn navy" id="btnOpts" aria-label="Month options">&#8943;</button>
       </div>
       <div class="tabs" role="tablist">
         <button class="tab" role="tab" data-tab="budget">Budget</button>
@@ -221,6 +224,8 @@ function labelFor(k){if(k===MAIN_KEY)return 'Main Budget';const [y,m]=k.split('-
 function todayKey(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 function isoDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function fmtDate(iso){const [y,m,d]=iso.split('-');return `${m}/${d}/${y}`;}
+const ICONS={search:'<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>',pencil:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 013 3L8 19z"/><path d="M14.5 6.5l3 3"/></svg>'};
+function icon(n){const e=document.createElement('span');e.className='ico';e.innerHTML=ICONS[n];return e;}
 function clone(o){return JSON.parse(JSON.stringify(o));}
 
 /* ===== state ===== */
@@ -338,14 +343,17 @@ function welcomeView(){
 function budgetView(){
   const frag=h('div');
   for(const sec of curSections())frag.append(sectionCard(sec));
-  frag.append(h('button',{class:'addbar',dataset:{act:'add-section'}},'+ Add section'));
+  frag.append(h('div',{class:'addrow'},h('button',{class:'addbar',dataset:{act:'add-section'}},'+ Add section'),
+    h('button',{class:'btn optbtn',dataset:{act:'options'}},'Options \u25BE')));
   return frag;}
 
 function sectionCard(sec){
   const card=h('section',{class:'card',dataset:{sid:sec.id}},
     h('div',{class:'sec-head'},
       h('input',{type:'text',value:sec.title,dataset:{f:'title'},'aria-label':'Section name',autocomplete:'off'}),
-      h('span',{class:'pill'},sec.kind==='income'?'Income':'Expenses')));
+      h('span',{class:'pill'},sec.kind==='income'?'Income':'Expenses'),
+      h('button',{class:'x',dataset:{act:'rename-section'},'aria-label':'Rename section'},icon('pencil')),
+      h('button',{class:'x',dataset:{act:'del-section'},'aria-label':'Delete section'},'\u00D7')));
   card.querySelector('input').value=sec.title;
   for(const r of sec.rows){
     const nameIn=h('input',{type:'text',dataset:{f:'name'},'aria-label':'Item name',autocomplete:'off'});nameIn.value=r.name;
@@ -354,13 +362,12 @@ function sectionCard(sec){
       h('div',{class:'item-top'},nameIn,h('button',{class:'x',dataset:{act:'del-item'},'aria-label':'Delete item'},'×')),
       h('div',{class:'nums'},
         h('label',null,h('span',{class:'k'},'Budgeted'),budIn),
-        h('button',{class:'link',dataset:{act:'view-item'}},h('span',{class:'k'},'Actual'),h('span',{class:'v num',dataset:{o:'actual'}},'$0.00'),h('small',{dataset:{o:'count'}},'View (0)')),
+        h('div',null,h('span',{class:'k'},'Actual'),h('div',{class:'actrow'},h('span',{class:'v num',dataset:{o:'actual'}},'$0.00'),h('button',{class:'iconbtn',dataset:{act:'view-item'},'aria-label':'View transactions',title:'View transactions'},icon('search')))),
         h('div',null,h('span',{class:'k'},'Remaining'),h('span',{class:'v num',dataset:{o:'rem'}},'$0.00')))));}
   card.append(h('div',{class:'sec-foot'},
     h('span',{class:'tot num',dataset:{o:'tot'}}),
     h('button',{class:'btn small',dataset:{act:'add-item'}},'+ Add item'),
-    h('span',{class:'spacer'}),
-    h('button',{class:'btn ghost small',dataset:{act:'del-section'}},'Delete section')));
+    ));
   return card;}
 
 function updateComputed(){
@@ -376,7 +383,6 @@ function updateComputed(){
       const b=parseNum(r.amount);
       if(row){
         $('[data-o=actual]',row).textContent=money(act);
-        $('[data-o=count]',row).textContent=`View (${c[r.id]||0})`;
         $('[data-f=bud]',row).classList.toggle('bad',isNaN(b));}
       if(isNaN(b)){ok=false;if(row){const e=$('[data-o=rem]',row);e.textContent='--';e.classList.remove('neg');}}
       else{bt+=b;if(row){const e=$('[data-o=rem]',row);e.textContent=money(round2(b-act));e.classList.toggle('neg',!inc&&b-act<0);}}}
@@ -546,7 +552,7 @@ async function addSection(){
 async function deleteSection(sid){
   const sec=curSections().find(s=>s.id===sid);if(!sec)return;
   const ids=new Set(sec.rows.map(r=>r.id));const n=curBudget().transactions.filter(t=>ids.has(t.item_id)).length;
-  if(!await confirmSheet('Delete section',`Delete "${sec.title}" and its ${sec.rows.length} item(s)?`+(n?`\n\n${n} transaction(s) under these items will show as (removed item).`:''),'Delete',true))return;
+  if(!await confirmSheet('Delete section',`Delete the entire section "${sec.title}" and its ${sec.rows.length} item(s)?`+(n?`\n\n${n} transaction(s) under these items will show as (removed item).`:'')+`\n\nThis can't be undone.`,'Delete',true))return;
   curBudget().sections=curSections().filter(s=>s.id!==sid);markDirty();render();}
 async function deleteItem(sid,rid){
   const sec=curSections().find(s=>s.id===sid);if(!sec)return;
@@ -709,7 +715,6 @@ function showCopyFallback(text){
 $('#btnOpen').onclick=openFilePicker;
 $('#btnSave').onclick=saveFile;
 $('#btnNew').onclick=()=>{if(data)newMonth();};
-$('#btnOpts').onclick=()=>{if(data)optionsSheet();};
 $('#jsonPick').addEventListener('change',e=>{const f=e.target.files[0];if(f)onJsonChosen(f);});
 $('#csvPick').addEventListener('change',e=>{const f=e.target.files[0];if(f)onCsvChosen(f);});
 $('#monthSel').addEventListener('change',e=>{data.current=e.target.value;selected=new Set();markDirty();render();window.scrollTo(0,0);});
@@ -732,6 +737,8 @@ main.addEventListener('click',e=>{
   const act=b.dataset.act,card=b.closest('[data-sid]'),row=b.closest('[data-rid]'),tx=b.closest('[data-tid]');
   switch(act){
     case 'add-section':addSection();break;
+    case 'options':optionsSheet();break;
+    case 'rename-section':{const el=card.querySelector('[data-f=title]');el.focus();el.select();break;}
     case 'del-section':deleteSection(card.dataset.sid);break;
     case 'add-item':{const s=curSections().find(x=>x.id===card.dataset.sid);const r={id:uid(),name:'New item',amount:''};s.rows.push(r);markDirty();render();
       const el=document.querySelector(`[data-rid="${r.id}"] [data-f=name]`);if(el){el.focus();el.select();}break;}
