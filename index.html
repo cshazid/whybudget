@@ -77,6 +77,10 @@ main{padding-top:14px;padding-bottom:140px}
 .item-top{display:flex;gap:8px;align-items:center}
 .nums{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.5fr) minmax(0,1fr);gap:8px;margin-top:8px}
 .nums>*{min-width:0}
+.extra{display:grid;gap:8px;margin-top:8px}
+.extra.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.extra label{display:block;min-width:0}
+.item input[type=date]{min-height:42px;-webkit-appearance:none;appearance:none}
 .k{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:2px}
 .v{display:block;padding:9px 0;font-weight:600}
 .v.neg{color:var(--bad)}
@@ -244,6 +248,10 @@ function fmtDate(iso){const [y,m,d]=iso.split('-');return `${m}/${d}/${y}`;}
 const ICONS={search:'<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>',pencil:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 013 3L8 19z"/><path d="M14.5 6.5l3 3"/></svg>'};
 function icon(n){const e=document.createElement('span');e.className='ico';e.innerHTML=ICONS[n];return e;}
 function clone(o){return JSON.parse(JSON.stringify(o));}
+function rollDue(b,key){ // bring saved due dates (YYYY-MM-DD) into the month being copied to
+  const [Y,M]=key.split('-').map(Number),last=new Date(Y,M,0).getDate();
+  for(const s of b.sections)for(const r of s.rows)if(/^\d{4}-\d{2}-\d{2}$/.test(r.due||'')){
+    const d=Math.min(+r.due.slice(8),last);r.due=Y+'-'+String(M).padStart(2,'0')+'-'+String(d).padStart(2,'0');}}
 
 /* ===== state ===== */
 let data=null, page='budget', filter='all', selected=new Set(), dirty=false, lastSaved=null;
@@ -251,7 +259,7 @@ const sortedKeys=()=>{const m=Object.keys(data.budgets).filter(k=>k!==MAIN_KEY).
 const latestKey=()=>{const m=Object.keys(data.budgets).filter(k=>k!==MAIN_KEY).sort();return m.length?m[m.length-1]:null;};
 const curBudget=()=>data.budgets[data.current];
 const curSections=()=>curBudget().sections;
-function defaultBudget(){return {sections:DEFAULT_SECTIONS.map(([title,kind,names])=>({id:uid(),title,kind,rows:names.map(n=>({id:uid(),name:n,amount:''}))})),transactions:[]};}
+function defaultBudget(){return normalizeBudget({sections:DEFAULT_SECTIONS.map(([title,kind,names])=>({id:uid(),title,kind,rows:names.map(n=>({id:uid(),name:n,amount:''}))})),transactions:[]});}
 
 function normalizeBudget(b){
   b=b||{};
@@ -262,7 +270,8 @@ function normalizeBudget(b){
   const sections=incoming.map(s=>({
     id:s.id||uid(), title:s.title||'Section',
     kind:s.kind||(s.title==='Monthly Income'?'income':'expense'),
-    rows:(s.rows||[]).map(r=>Array.isArray(r)?{id:uid(),name:r[0],amount:r[1]}:{id:r.id||uid(),name:r.name||'',amount:r.amount??''})}));
+    debt:s.debt??((s.kind||'expense')==='expense'&&/^debt/i.test(s.title||'')),
+    rows:(s.rows||[]).map(r=>Array.isArray(r)?{id:uid(),name:r[0],amount:r[1]}:{...r,id:r.id||uid(),name:r.name||'',amount:r.amount??''})}));
   return {sections,transactions:('sections' in b&&Array.isArray(b.transactions))?b.transactions:[]};}
 
 function loadData(obj){
@@ -366,11 +375,22 @@ function budgetView(){
     h('button',{class:'btn optbtn',dataset:{act:'options'}},'Options \u25BE')));
   return frag;}
 
+function extraFields(sec,r){
+  const out=[];
+  if(sec.kind!=='income'){ // income has no due date
+    const due=h('input',{type:'date',dataset:{f:'due'},'aria-label':'Due date'});
+    due.value=/^\d{4}-\d{2}-\d{2}$/.test(r.due||'')?r.due:'';
+    out.push(h('div',{class:'extra'},h('label',null,h('span',{class:'k'},'Due date'),due)));}
+  if(sec.debt){
+    const box=(f,label,mode,ph)=>{const i=h('input',{type:'text',inputmode:mode,dataset:{f},'aria-label':label,autocomplete:'off',placeholder:ph});i.value=r[f]??'';return h('label',null,h('span',{class:'k'},label),i);};
+    out.push(h('div',{class:'extra three'},box('balance','Balance','decimal','0.00'),box('min_payment','Min pay','decimal','0.00'),box('rate','Rate %','decimal','0.0')));}
+  return out;}
+
 function sectionCard(sec){
   const card=h('section',{class:'card',dataset:{sid:sec.id}},
     h('div',{class:'sec-head'},
       h('input',{type:'text',value:sec.title,dataset:{f:'title'},'aria-label':'Section name',autocomplete:'off'}),
-      h('span',{class:'pill'},sec.kind==='income'?'Income':'Expenses'),
+      h('span',{class:'pill'},sec.kind==='income'?'Income':sec.debt?'Debt':'Expenses'),
       h('button',{class:'x faint',dataset:{act:'rename-section'},'aria-label':'Rename section'},icon('pencil')),
       h('button',{class:'x',dataset:{act:'del-section'},'aria-label':'Delete section'},'\u00D7')));
   card.querySelector('input').value=sec.title;
@@ -382,10 +402,11 @@ function sectionCard(sec){
       h('div',{class:'nums'},
         h('label',null,h('span',{class:'k'},'Budgeted'),budIn),
         h('div',null,h('span',{class:'k'},'Actual'),h('div',{class:'actrow'},h('span',{class:'v num',dataset:{o:'actual'}},'$0.00'),h('button',{class:'iconbtn',dataset:{act:'view-item'},'aria-label':'View transactions',title:'View transactions'},icon('search')))),
-        h('div',null,h('span',{class:'k'},'Remaining'),h('span',{class:'v num',dataset:{o:'rem'}},'$0.00')))));}
+        h('div',null,h('span',{class:'k'},'Remaining'),h('span',{class:'v num',dataset:{o:'rem'}},'$0.00'))),
+      ...extraFields(sec,r)));}
   card.append(h('div',{class:'sec-foot'},
     h('span',{class:'tot num',dataset:{o:'tot'}}),
-    h('button',{class:'btn small',dataset:{act:'add-item'}},'+ Add item'),
+    h('button',{class:'btn small',dataset:{act:'add-item'}},sec.kind==='income'?'+ Add income source':sec.debt?'+ Add debt':'+ Add item'),
     ));
   return card;}
 
@@ -408,7 +429,8 @@ function updateComputed(){
     if(inc)ia+=at;else sa+=at;
     if(ok){if(inc)ib+=bt;else sb+=bt;}else allOk=false;
     if(card){const t=$('[data-o=tot]',card);
-      t.replaceChildren(...(ok?['Budgeted ',h('b',null,money(round2(bt))),'   Actual ',h('b',null,money(round2(at))),'   Remaining ',h('b',null,money(round2(bt-at)))]
+      const dn=sec.debt?[ 'Total owed ',h('b',null,money(round2(sec.rows.reduce((n,r)=>n+(parseNum(r.balance)||0),0)))),'   Minimum payments ',h('b',null,money(round2(sec.rows.reduce((n,r)=>n+(parseNum(r.min_payment)||0),0)))),h('br')]:[];
+      t.replaceChildren(...dn,...(ok?['Budgeted ',h('b',null,money(round2(bt))),'   Actual ',h('b',null,money(round2(at))),'   Remaining ',h('b',null,money(round2(bt-at)))]
                               :['Budgeted: check numbers   Actual ',h('b',null,money(round2(at)))]));}}
   const mb=$('#mBud'),ma=$('#mAct');
   if(allOk){const left=round2(ib-sb);mb.textContent=money(left);mb.className='num '+(left>=0?'pos':'neg');}else{mb.textContent='--';mb.className='num';}
@@ -571,12 +593,12 @@ async function addSection(){
     const name=h('input',{type:'text',autocomplete:'off',placeholder:'e.g. Groceries'});
     const err=h('p',{class:'err',role:'alert'});let kind='expense';
     const mk=(v,t)=>h('label',{class:'chkline'},h('input',{type:'radio',name:'kind',value:v,checked:v==='expense',onchange:()=>kind=v}),h('span',null,t));
-    return h('form',{onsubmit:e=>{e.preventDefault();if(!name.value.trim()){err.textContent='Please give the section a name.';return;}close({title:name.value.trim(),kind});}},
+    return h('form',{onsubmit:e=>{e.preventDefault();if(!name.value.trim()){err.textContent='Please give the section a name.';return;}close({title:name.value.trim(),kind:kind==='income'?'income':'expense',debt:kind==='debt'});}},
       h('h3',null,'New section'),h('label',{class:'f'},h('span',null,'Name'),name),
-      mk('expense','Expenses (money going out)'),mk('income','Income (money coming in)'),err,
+      mk('expense','Expenses (money going out)'),mk('debt','Debt (balance, minimum payment, rate)'),mk('income','Income (money coming in)'),err,
       h('div',{class:'row'},h('button',{type:'button',class:'btn',onclick:()=>close(undefined)},'Cancel'),h('button',{type:'submit',class:'btn primary'},'Add section')));});
   if(!res)return;
-  curSections().push({id:uid(),title:res.title,kind:res.kind,rows:[{id:uid(),name:'New item',amount:''}]});
+  curSections().push({id:uid(),title:res.title,kind:res.kind,debt:!!res.debt,rows:[{id:uid(),name:'New item',amount:'',due:'',...(res.debt?{balance:'',min_payment:'',rate:''}:{})}]});
   markDirty();render();}
 async function deleteSection(sid){
   const sec=curSections().find(s=>s.id===sid);if(!sec)return;
@@ -610,7 +632,7 @@ async function newMonth(){
       h('label',{class:'chkline',for:'copyChk'},cp,h('span',null,'Copy sections, items and amounts from '+labelFor(source))),err,
       h('div',{class:'row'},h('button',{type:'button',class:'btn',onclick:()=>close(undefined)},'Cancel'),h('button',{type:'submit',class:'btn primary'},'Create')));});
   if(!res)return;
-  if(res.copy){const nb=clone(data.budgets[source]);nb.transactions=[];data.budgets[res.key]=nb;}else data.budgets[res.key]=defaultBudget();
+  if(res.copy){const nb=clone(data.budgets[source]);nb.transactions=[];rollDue(nb,res.key);data.budgets[res.key]=nb;}else data.budgets[res.key]=defaultBudget();
   data.current=res.key;selected=new Set();markDirty();render();}
 
 async function resetMonth(){
@@ -619,7 +641,7 @@ async function resetMonth(){
   const prev=keys[i-1],n=curBudget().transactions.length;
   const ok=await confirmSheet('Reset budget',`Reset ${labelFor(data.current)} using ${labelFor(prev)}?\n\nAll sections, items and amounts in ${labelFor(data.current)} will be replaced with ${labelFor(prev)}'s.`+(n?`\n\nIts ${n} transaction(s) will also be deleted.`:'')+`\n\nThis can't be undone.`,'Reset',true);
   if(!ok)return;
-  const fresh=clone(data.budgets[prev]);fresh.transactions=[];data.budgets[data.current]=fresh;markDirty();render();}
+  const fresh=clone(data.budgets[prev]);fresh.transactions=[];rollDue(fresh,data.current);data.budgets[data.current]=fresh;markDirty();render();}
 async function deleteMonth(){
   if(Object.keys(data.budgets).length<=1){await infoSheet("Can't delete",'You need at least one budget. Create another month first, then delete this one.');return;}
   const n=curBudget().transactions.length;
@@ -752,17 +774,18 @@ for(const t of document.querySelectorAll('.tab'))t.addEventListener('click',()=>
   if(!matchMedia('(prefers-reduced-motion: reduce)').matches&&main.animate)
     main.animate([{transform:`translateX(${dir*40}px)`,opacity:0},{transform:'none',opacity:1}],{duration:260,easing:'cubic-bezier(.2,.7,.2,1)'});});
 
+const ROW_EXTRA=['due','balance','min_payment','rate'];
 const main=$('#main');
 main.addEventListener('input',e=>{
   const t=e.target,f=t.dataset.f;if(!f||f==='sel')return;
   const card=t.closest('[data-sid]');if(!card)return;
   if(f==='title'){const s=curSections().find(x=>x.id===card.dataset.sid);if(s){s.title=t.value;markDirty();}return;}
   const loc=findRow(card.dataset.sid,t.closest('[data-rid]').dataset.rid);if(!loc||!loc.row)return;
-  if(f==='name')loc.row.name=t.value;else if(f==='bud')loc.row.amount=t.value;
+  if(f==='name')loc.row.name=t.value;else if(f==='bud')loc.row.amount=t.value;else if(ROW_EXTRA.includes(f))loc.row[f]=t.value;
   markDirty();});
 main.addEventListener('change',e=>{
   const t=e.target,f=t.dataset.f;
-  if(f==='bud')updateComputed();
+  if(f==='bud'||ROW_EXTRA.includes(f))updateComputed();
   if(f==='sel'){const id=t.closest('[data-tid]').dataset.tid;if(t.checked)selected.add(id);else selected.delete(id);renderMain();}});
 main.addEventListener('click',e=>{
   const b=e.target.closest('[data-act]');if(!b)return;
@@ -772,7 +795,7 @@ main.addEventListener('click',e=>{
     case 'options':optionsSheet();break;
     case 'rename-section':{const el=card.querySelector('[data-f=title]');el.focus();el.select();break;}
     case 'del-section':deleteSection(card.dataset.sid);break;
-    case 'add-item':{const s=curSections().find(x=>x.id===card.dataset.sid);const r={id:uid(),name:'New item',amount:''};s.rows.push(r);markDirty();render();
+    case 'add-item':{const s=curSections().find(x=>x.id===card.dataset.sid);const r={id:uid(),name:'New item',amount:'',due:''};if(s.debt)Object.assign(r,{balance:'',min_payment:'',rate:''});s.rows.push(r);markDirty();render();
       const el=document.querySelector(`[data-rid="${r.id}"] [data-f=name]`);if(el){el.focus();el.select();}break;}
     case 'del-item':deleteItem(card.dataset.sid,row.dataset.rid);break;
     case 'view-item':itemSheet(row.dataset.rid);break;
