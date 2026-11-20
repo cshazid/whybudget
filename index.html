@@ -75,7 +75,7 @@ main{padding-top:14px;padding-bottom:140px}
 .pill{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;padding:3px 8px;border-radius:99px;background:var(--field);color:var(--muted);border:1px solid var(--line)}
 .item{padding:12px 0 4px;border-top:1px solid var(--line);margin-top:10px}
 .item-top{display:flex;gap:8px;align-items:center}
-.nums{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.5fr) minmax(0,1fr);gap:8px;margin-top:8px}
+.nums{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:8px;margin-top:8px;align-items:end}
 .nums>*{min-width:0}
 .extra{display:grid;gap:8px;margin-top:8px}
 .extra.three{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -92,6 +92,20 @@ main{padding-top:14px;padding-bottom:140px}
 .item input{width:100%;background:var(--field);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:16px;color:var(--text)}
 input.bad{border-color:var(--bad)!important}
 .sec-foot{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:1px solid var(--line);margin-top:10px;padding-top:10px}
+.card.sec{overflow:hidden}
+.totstrip{background:var(--navy);color:#fff;margin:14px -14px -14px;padding:10px 16px 11px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.totstrip>div:nth-child(2){text-align:center}.totstrip>div:nth-child(3){text-align:right}
+.totstrip .tk{display:block;font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--navy-text)}
+.totstrip .tv{display:block;font-size:16px;font-weight:700;white-space:nowrap}
+.totstrip .tv.neg{color:var(--on-navy-bad)}
+.picker{position:relative}
+.picker .plist{margin-top:6px;max-height:210px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+.picker .plist button{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:11px 12px;font-size:15px;color:var(--text)}
+.picker .plist button:last-child{border-bottom:0}.picker .plist button:active{background:var(--field)}
+.picker .plist .none{padding:11px 12px;font-size:14px;color:var(--muted)}
+.dbox{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:4px 0 12px}
+.dbox h4{margin:0 0 8px}
+.dbox .three{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .sec-foot .tot{flex-basis:100%;font-size:13px;color:var(--muted)}
 .sec-foot .tot b{color:var(--text)}
 .x{background:none;border:0;color:var(--muted);font-size:22px;line-height:1;padding:6px 8px;cursor:pointer;border-radius:8px}
@@ -381,13 +395,10 @@ function extraFields(sec,r){
     const due=h('input',{type:'date',dataset:{f:'due'},'aria-label':'Due date'});
     due.value=/^\d{4}-\d{2}-\d{2}$/.test(r.due||'')?r.due:'';
     out.push(h('div',{class:'extra'},h('label',null,h('span',{class:'k'},'Due date'),due)));}
-  if(sec.debt){
-    const box=(f,label,mode,ph)=>{const i=h('input',{type:'text',inputmode:mode,dataset:{f},'aria-label':label,autocomplete:'off',placeholder:ph});i.value=r[f]??'';return h('label',null,h('span',{class:'k'},label),i);};
-    out.push(h('div',{class:'extra three'},box('balance','Balance','decimal','0.00'),box('min_payment','Min pay','decimal','0.00'),box('rate','Rate %','decimal','0.0')));}
   return out;}
 
 function sectionCard(sec){
-  const card=h('section',{class:'card',dataset:{sid:sec.id}},
+  const card=h('section',{class:'card sec',dataset:{sid:sec.id}},
     h('div',{class:'sec-head'},
       h('input',{type:'text',value:sec.title,dataset:{f:'title'},'aria-label':'Section name',autocomplete:'off'}),
       h('span',{class:'pill'},sec.kind==='income'?'Income':sec.debt?'Debt':'Expenses'),
@@ -401,13 +412,15 @@ function sectionCard(sec){
       h('div',{class:'item-top'},nameIn,h('button',{class:'x',dataset:{act:'del-item'},'aria-label':'Delete item'},'×')),
       h('div',{class:'nums'},
         h('label',null,h('span',{class:'k'},'Budgeted'),budIn),
-        h('div',null,h('span',{class:'k'},'Actual'),h('div',{class:'actrow'},h('span',{class:'v num',dataset:{o:'actual'}},'$0.00'),h('button',{class:'iconbtn',dataset:{act:'view-item'},'aria-label':'View transactions',title:'View transactions'},icon('search')))),
-        h('div',null,h('span',{class:'k'},'Remaining'),h('span',{class:'v num',dataset:{o:'rem'}},'$0.00'))),
+        h('div',null,h('span',{class:'k'},'Remaining'),h('span',{class:'v num',dataset:{o:'rem'}},'$0.00')),
+        h('button',{class:'iconbtn',dataset:{act:'view-item'},'aria-label':'Open item and its transactions',title:'Open item'},icon('search'))),
       ...extraFields(sec,r)));}
   card.append(h('div',{class:'sec-foot'},
-    h('span',{class:'tot num',dataset:{o:'tot'}}),
-    h('button',{class:'btn small',dataset:{act:'add-item'}},sec.kind==='income'?'+ Add income source':sec.debt?'+ Add debt':'+ Add item'),
-    ));
+    h('button',{class:'btn small',dataset:{act:'add-item'}},sec.kind==='income'?'+ Add income source':sec.debt?'+ Add debt':'+ Add item')));
+  card.append(h('div',{class:'totstrip'},
+    h('div',null,h('span',{class:'tk'},'BUDGETED'),h('span',{class:'tv num',dataset:{o:'tb'}},'$0.00')),
+    h('div',null,h('span',{class:'tk'},'ACTUAL'),h('span',{class:'tv num',dataset:{o:'ta'}},'$0.00')),
+    h('div',null,h('span',{class:'tk'},'REMAINING'),h('span',{class:'tv num',dataset:{o:'tr'}},'$0.00'))));
   return card;}
 
 function updateComputed(){
@@ -422,16 +435,16 @@ function updateComputed(){
       const row=card&&card.querySelector(`[data-rid="${r.id}"]`);
       const b=parseNum(r.amount);
       if(row){
-        $('[data-o=actual]',row).textContent=money(act);
         $('[data-f=bud]',row).classList.toggle('bad',isNaN(b));}
       if(isNaN(b)){ok=false;if(row){const e=$('[data-o=rem]',row);e.textContent='--';e.classList.remove('neg');}}
       else{bt+=b;if(row){const e=$('[data-o=rem]',row);e.textContent=money(round2(b-act));e.classList.toggle('neg',!inc&&b-act<0);}}}
     if(inc)ia+=at;else sa+=at;
     if(ok){if(inc)ib+=bt;else sb+=bt;}else allOk=false;
-    if(card){const t=$('[data-o=tot]',card);
-      const dn=sec.debt?[ 'Total owed ',h('b',null,money(round2(sec.rows.reduce((n,r)=>n+(parseNum(r.balance)||0),0)))),'   Minimum payments ',h('b',null,money(round2(sec.rows.reduce((n,r)=>n+(parseNum(r.min_payment)||0),0)))),h('br')]:[];
-      t.replaceChildren(...dn,...(ok?['Budgeted ',h('b',null,money(round2(bt))),'   Actual ',h('b',null,money(round2(at))),'   Remaining ',h('b',null,money(round2(bt-at)))]
-                              :['Budgeted: check numbers   Actual ',h('b',null,money(round2(at)))]));}}
+    if(card){
+      $('[data-o=tb]',card).textContent=ok?money(round2(bt)):'--';
+      $('[data-o=ta]',card).textContent=money(round2(at));
+      const tr=$('[data-o=tr]',card);tr.textContent=ok?money(round2(bt-at)):'--';
+      tr.classList.toggle('neg',ok&&!inc&&bt-at<0);}}
   const mb=$('#mBud'),ma=$('#mAct');
   if(allOk){const left=round2(ib-sb);mb.textContent=money(left);mb.className='num '+(left>=0?'pos':'neg');}else{mb.textContent='--';mb.className='num';}
   const al=round2(ia-sa);ma.textContent=money(al);ma.className='num '+(al>=0?'pos':'neg');}
@@ -484,6 +497,32 @@ function fillItems(select,key,withPlaceholder,keepId){
   select.replaceChildren(...(withPlaceholder?[h('option',{value:''},'Select a budget item...')]:[]),...ch.map(c=>h('option',{value:c.id},c.label)));
   select.value=ch.some(c=>c.id===keepId)?keepId:(withPlaceholder?'':(ch[0]?ch[0].id:''));}
 
+/* a text box that doubles as a drop-down: typing narrows the list of budget items */
+function itemPicker(monthEl,{initial=null,required=false,startWithFirst=false}={}){
+  const input=h('input',{type:'text',autocomplete:'off','aria-label':'Budget item',placeholder:required?'Type to search items':'Type to search, or leave empty'});
+  const list=h('div',{class:'plist'});list.hidden=true;
+  let chosen=null;
+  const show=()=>{
+    const q=input.value.trim().toLowerCase();
+    const ch=itemChoices(monthEl.value).filter(c=>c.label.toLowerCase().includes(q));
+    list.replaceChildren(...(ch.length?ch.map(c=>h('button',{type:'button',onclick:()=>{chosen=c.id;input.value=c.label;list.hidden=true;}},c.label)):[h('div',{class:'none'},'No items match')]));
+    list.hidden=false;};
+  const setItem=id=>{const c=itemChoices(monthEl.value).find(x=>x.id===id);chosen=c?c.id:null;input.value=c?c.label:'';list.hidden=true;};
+  input.addEventListener('input',()=>{chosen=null;show();});
+  input.addEventListener('focus',show);
+  monthEl.addEventListener('change',()=>{chosen=null;input.value='';list.hidden=true;});
+  const first=itemChoices(monthEl.value)[0];
+  setItem(initial||(startWithFirst&&first?first.id:null));
+  const value=()=>{ // an item id, null when empty, undefined when it matches nothing
+    const t=input.value.trim().toLowerCase();
+    if(chosen&&itemChoices(monthEl.value).some(c=>c.id===chosen&&c.label.toLowerCase()===t))return chosen;
+    if(!t)return null;
+    const all=itemChoices(monthEl.value),exact=all.filter(c=>c.label.toLowerCase()===t);
+    if(exact.length)return exact[0].id;
+    const part=all.filter(c=>c.label.toLowerCase().includes(t));
+    return part.length===1?part[0].id:undefined;};
+  return {el:h('div',{class:'picker'},input,list),value};}
+
 function defaultTxnDate(){
   const now=new Date();
   if(data.current!==MAIN_KEY&&data.current!==todayKey()){return data.current+'-01';}
@@ -496,17 +535,17 @@ function txnDialog({txn=null,presetItem=null}={}){
     const desc=h('input',{type:'text',autocomplete:'off'});desc.value=txn?txn.description:'';
     const amt=h('input',{type:'text',inputmode:'decimal',autocomplete:'off',placeholder:'0.00'});
     amt.value=txn?(imported?Math.abs(txn.amount).toFixed(2):txn.amount.toFixed(2)):'';
-    const month=monthSelect(data.current);const item=h('select');
-    fillItems(item,month.value,needsChoice,txn?txn.item_id:presetItem);
-    month.addEventListener('change',()=>fillItems(item,month.value,needsChoice,null));
+    const month=monthSelect(data.current);
+    const picker=itemPicker(month,{initial:txn?txn.item_id:presetItem,startWithFirst:!txn&&!presetItem&&!needsChoice});
     const err=h('p',{class:'err',role:'alert'});
     const save=()=>{
       if(!date.value){err.textContent='Please choose a date.';return;}
       const n=parseNum(amt.value);
       if(isNaN(n)){err.textContent='Please enter the amount as a number, like 45.50.';return;}
       const a=round2(n);if(a===0){err.textContent='Please enter an amount.';return;}
-      if(!item.value){err.textContent='Please choose a budget item.';return;}
-      close({date:date.value,description:desc.value.trim(),amount:a,month:month.value,item_id:item.value});};
+      const itemId=picker.value();
+      if(itemId===undefined){err.textContent="That doesn't match a budget item. Type part of a name and pick one, or clear the box to leave it unallocated.";return;}
+      close({date:date.value,description:desc.value.trim(),amount:a,month:month.value,item_id:itemId});};
     return h('form',{onsubmit:e=>{e.preventDefault();save();}},
       h('h3',null,txn?'Edit transaction':'Add transaction'),
       imported?h('div',{class:'info'},'From your bank: '+money(txn.bank_amount)+(txn.category?'   |   '+txn.category:'')):null,
@@ -514,7 +553,7 @@ function txnDialog({txn=null,presetItem=null}={}){
       h('label',{class:'f'},h('span',null,'Description'),desc),
       h('label',{class:'f'},h('span',null,imported?'Amount ($, no sign)':'Amount ($)'),amt),
       h('label',{class:'f'},h('span',null,'Budget month'),month),
-      h('label',{class:'f'},h('span',null,'Budget item'),item),
+      h('div',{class:'f'},h('span',null,'Budget item'),picker.el),
       err,
       h('div',{class:'row'},
         txn?h('button',{type:'button',class:'btn danger',onclick:()=>close({remove:true})},'Delete'):null,
@@ -524,22 +563,26 @@ function txnDialog({txn=null,presetItem=null}={}){
 
 function allocateDialog(count){
   return openSheet(close=>{
-    const month=monthSelect(data.current);const item=h('select');
-    fillItems(item,month.value,true,null);
-    month.addEventListener('change',()=>fillItems(item,month.value,true,null));
+    const month=monthSelect(data.current);
+    const picker=itemPicker(month,{required:true});
     const err=h('p',{class:'err',role:'alert'});
-    return h('form',{onsubmit:e=>{e.preventDefault();if(!item.value){err.textContent='Please choose a budget item.';return;}close({month:month.value,item_id:item.value});}},
+    return h('form',{onsubmit:e=>{e.preventDefault();const id=picker.value();if(!id){err.textContent='Please choose a budget item from the list.';return;}close({month:month.value,item_id:id});}},
       h('h3',null,`Allocate ${count} transaction${count===1?'':'s'}`),
       h('label',{class:'f'},h('span',null,'Budget month'),month),
-      h('label',{class:'f'},h('span',null,'Budget item'),item),err,
+      h('div',{class:'f'},h('span',null,'Budget item'),picker.el),err,
       h('div',{class:'row'},h('button',{type:'button',class:'btn',onclick:()=>close(undefined)},'Cancel'),h('button',{type:'submit',class:'btn primary'},'Allocate')));});}
 
 function tellIfElsewhere(monthKey,count){if(monthKey!==data.current)toast(`${count} transaction(s) now belong to ${labelFor(monthKey)}. Switch to that month to see them.`);}
 
 async function addTxn(presetItem=null){
   const res=await txnDialog({presetItem});if(!res||res.remove)return;
-  data.budgets[res.month].transactions.push({id:uid(),date:res.date,description:res.description,amount:res.amount,item_id:res.item_id});
-  tellIfElsewhere(res.month,1);markDirty();render();}
+  const t={id:uid(),date:res.date,description:res.description,amount:res.amount,item_id:res.item_id};
+  if(res.item_id==null)data.untracked.push(t); // no budget item chosen: stays unallocated
+  else{data.budgets[res.month].transactions.push(t);tellIfElsewhere(res.month,1);}
+  markDirty();render();}
+function unallocateTxn(t){
+  if('bank_amount' in t)t.amount=t.bank_amount;
+  t.item_id=null;removeTxn(t);data.untracked.push(t);}
 async function editTxn(id){
   const t=findTxn(id);if(!t)return;
   const res=await txnDialog({txn:t});if(!res)return;
@@ -547,6 +590,7 @@ async function editTxn(id){
     if(!await confirmSheet('Delete transaction','Delete this transaction?','Delete',true))return;
     removeTxn(t);selected.delete(id);markDirty();render();return;}
   t.date=res.date;t.description=res.description;
+  if(res.item_id==null){if(!('bank_amount' in t))t.amount=res.amount;unallocateTxn(t);markDirty();render();return;}
   if('bank_amount' in t)placeTxn(t,res.month,res.item_id,Math.abs(res.amount));
   else{t.amount=res.amount;placeTxn(t,res.month,res.item_id);}
   tellIfElsewhere(res.month,1);markDirty();render();}
@@ -569,8 +613,15 @@ function itemSheet(itemId){
     const list=curBudget().transactions.filter(t=>t.item_id===itemId).sort((x,y)=>y.date.localeCompare(x.date));
     const total=list.reduce((n,t)=>n+t.amount,0);
     const pool=[...data.untracked].sort((x,y)=>y.date.localeCompare(x.date));
+    let rowObj=null,isDebt=false;
+    for(const s of curSections())for(const r of s.rows)if(r.id===itemId){rowObj=r;isDebt=!!s.debt;}
+    const box=(f,label,ph)=>{const i=h('input',{type:'text',inputmode:'decimal',autocomplete:'off','aria-label':label,placeholder:ph});i.value=rowObj[f]??'';
+      i.addEventListener('input',()=>{rowObj[f]=i.value;markDirty();});return h('label',null,h('span',{class:'k'},label),i);};
+    const debtBox=(isDebt&&rowObj)?h('div',{class:'dbox'},h('h4',null,'Debt details'),
+      h('div',{class:'three'},box('balance','Balance','0.00'),box('min_payment','Min pay','0.00'),box('rate','Rate %','0.0'))):null;
     return h('div',null,h('h3',null,name),
       h('p',{class:'msg num'},`${list.length} transaction(s)  \u00B7  Actual ${money(round2(total))}`),
+      debtBox,
       list.length?list.map(t=>h('div',{class:'txn',style:'margin-bottom:8px'},
         h('button',{class:'main',style:'padding-left:12px',onclick:()=>editTxn(t.id)},
           h('span',{class:'l'},h('span',{class:'d'},t.description||'(no description)'),h('span',{class:'m'},fmtDate(t.date))),
