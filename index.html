@@ -93,6 +93,7 @@ main{padding-top:14px;padding-bottom:140px}
 input.bad{border-color:var(--bad)!important}
 .sec-foot{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:1px solid var(--line);margin-top:10px;padding-top:10px}
 .card.sec{overflow:hidden}
+.duenote{font-size:12px;color:var(--muted);margin:3px 4px 0}
 .totstrip{background:var(--navy);color:#fff;margin:14px -14px -14px;padding:10px 16px 11px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .totstrip>div:nth-child(2){text-align:center}.totstrip>div:nth-child(3){text-align:right}
 .totstrip .tk{display:block;font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--navy-text)}
@@ -389,13 +390,14 @@ function budgetView(){
     h('button',{class:'btn optbtn',dataset:{act:'options'}},'Options \u25BE')));
   return frag;}
 
-function extraFields(sec,r){
-  const out=[];
-  if(sec.kind!=='income'){ // income has no due date
-    const due=h('input',{type:'date',dataset:{f:'due'},'aria-label':'Due date'});
-    due.value=/^\d{4}-\d{2}-\d{2}$/.test(r.due||'')?r.due:'';
-    out.push(h('div',{class:'extra'},h('label',null,h('span',{class:'k'},'Due date'),due)));}
-  return out;}
+const validDue=v=>/^\d{4}-\d{2}-\d{2}$/.test(v||'');
+function dueNote(sec,r){ // view-only line under the item name; the date is changed in the item window
+  const n=h('div',{class:'duenote',dataset:{o:'due'}});
+  if(sec.kind!=='income'&&validDue(r.due))n.textContent='Due '+fmtDate(r.due);else n.hidden=true;
+  return n;}
+function setDueNote(rid,r){
+  const n=document.querySelector(`[data-rid="${rid}"] [data-o=due]`);if(!n)return;
+  if(validDue(r.due)){n.textContent='Due '+fmtDate(r.due);n.hidden=false;}else{n.textContent='';n.hidden=true;}}
 
 function sectionCard(sec){
   const card=h('section',{class:'card sec',dataset:{sid:sec.id}},
@@ -410,11 +412,11 @@ function sectionCard(sec){
     const budIn=h('input',{type:'text',inputmode:'decimal',dataset:{f:'bud'},'aria-label':'Budgeted amount',autocomplete:'off',placeholder:'0.00'});budIn.value=r.amount;
     card.append(h('div',{class:'item',dataset:{rid:r.id}},
       h('div',{class:'item-top'},nameIn,h('button',{class:'x',dataset:{act:'del-item'},'aria-label':'Delete item'},'×')),
+      dueNote(sec,r),
       h('div',{class:'nums'},
         h('label',null,h('span',{class:'k'},'Budgeted'),budIn),
         h('div',null,h('span',{class:'k'},'Remaining'),h('span',{class:'v num',dataset:{o:'rem'}},'$0.00')),
-        h('button',{class:'iconbtn',dataset:{act:'view-item'},'aria-label':'Open item and its transactions',title:'Open item'},icon('search'))),
-      ...extraFields(sec,r)));}
+        h('button',{class:'iconbtn',dataset:{act:'view-item'},'aria-label':'Open item and its transactions',title:'Open item'},icon('search')))));}
   card.append(h('div',{class:'sec-foot'},
     h('button',{class:'btn small',dataset:{act:'add-item'}},sec.kind==='income'?'+ Add income source':sec.debt?'+ Add debt':'+ Add item')));
   card.append(h('div',{class:'totstrip'},
@@ -613,15 +615,20 @@ function itemSheet(itemId){
     const list=curBudget().transactions.filter(t=>t.item_id===itemId).sort((x,y)=>y.date.localeCompare(x.date));
     const total=list.reduce((n,t)=>n+t.amount,0);
     const pool=[...data.untracked].sort((x,y)=>y.date.localeCompare(x.date));
-    let rowObj=null,isDebt=false;
-    for(const s of curSections())for(const r of s.rows)if(r.id===itemId){rowObj=r;isDebt=!!s.debt;}
+    let rowObj=null,isDebt=false,isInc=false;
+    for(const s of curSections())for(const r of s.rows)if(r.id===itemId){rowObj=r;isDebt=!!s.debt;isInc=s.kind==='income';}
     const box=(f,label,ph)=>{const i=h('input',{type:'text',inputmode:'decimal',autocomplete:'off','aria-label':label,placeholder:ph});i.value=rowObj[f]??'';
       i.addEventListener('input',()=>{rowObj[f]=i.value;markDirty();});return h('label',null,h('span',{class:'k'},label),i);};
     const debtBox=(isDebt&&rowObj)?h('div',{class:'dbox'},h('h4',null,'Debt details'),
       h('div',{class:'three'},box('balance','Balance','0.00'),box('min_payment','Min pay','0.00'),box('rate','Rate %','0.0'))):null;
+    let dueBox=null;
+    if(rowObj&&!isInc){
+      const di=h('input',{type:'date','aria-label':'Due date'});di.value=validDue(rowObj.due)?rowObj.due:'';
+      di.addEventListener('change',()=>{rowObj.due=di.value;setDueNote(itemId,rowObj);markDirty();});
+      dueBox=h('label',{class:'f'},h('span',{class:'k'},'Due date'),di);}
     return h('div',null,h('h3',null,name),
       h('p',{class:'msg num'},`${list.length} transaction(s)  \u00B7  Actual ${money(round2(total))}`),
-      debtBox,
+      dueBox,debtBox,
       list.length?list.map(t=>h('div',{class:'txn',style:'margin-bottom:8px'},
         h('button',{class:'main',style:'padding-left:12px',onclick:()=>editTxn(t.id)},
           h('span',{class:'l'},h('span',{class:'d'},t.description||'(no description)'),h('span',{class:'m'},fmtDate(t.date))),
