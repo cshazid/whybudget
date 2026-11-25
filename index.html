@@ -93,6 +93,20 @@ main{padding-top:14px;padding-bottom:140px}
 input.bad{border-color:var(--bad)!important}
 .sec-foot{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:1px solid var(--line);margin-top:10px;padding-top:10px}
 .card.sec{overflow:hidden}
+.paid{background:#1e9e5a;color:#fff;font-size:11px;font-weight:700;padding:3px 7px;border-radius:5px;flex:none}.paid[hidden]{display:none}
+.ext{white-space:pre-wrap;background:var(--field);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:14px;user-select:text;-webkit-user-select:text}
+.plan{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.prow{display:flex;align-items:stretch;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.prow.inc{background:#e8f5ec}.prow.drag{box-shadow:0 6px 18px rgba(0,0,0,.25);position:relative;z-index:2}
+.prow .grip{width:44px;flex:none;border:0;background:none;font-size:20px;color:var(--muted);touch-action:none;cursor:grab}
+.prow .pmain{flex:1;min-width:0;background:none;border:0;text-align:left;padding:10px 6px 10px 0;display:flex;gap:8px;justify-content:space-between;color:var(--text)}
+.prow .l{min-width:0}.prow .d{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.prow .m{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.prow .r,.prow .prem{display:flex;flex-direction:column;align-items:flex-end;white-space:nowrap}
+.prow .prem{padding:10px 12px 10px 4px;justify-content:center;min-width:92px}
+.prow .k{font-size:10px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.prow .v{font-weight:700}.prow .v.neg{color:#c0392b}
+.part{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,1.3fr) auto;gap:8px;align-items:center;margin-bottom:8px}
 .duenote{font-size:12px;color:var(--muted);margin:3px 4px 0}
 .totstrip{background:var(--navy);color:#fff;margin:14px -14px -14px;padding:10px 16px 11px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .totstrip>div:nth-child(2){text-align:center}.totstrip>div:nth-child(3){text-align:right}
@@ -215,6 +229,7 @@ body{margin:0}img{max-width:100%}[hidden]{display:none!important}
       <div class="tabs" role="tablist">
         <button class="tab" role="tab" data-tab="budget">Budget</button>
         <button class="tab" role="tab" data-tab="transactions">Transactions</button>
+        <button class="tab" role="tab" data-tab="planning">Planning</button>
       </div>
     </div>
   </header>
@@ -263,10 +278,15 @@ function fmtDate(iso){const [y,m,d]=iso.split('-');return `${m}/${d}/${y}`;}
 const ICONS={search:'<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>',pencil:'<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 013 3L8 19z"/><path d="M14.5 6.5l3 3"/></svg>'};
 function icon(n){const e=document.createElement('span');e.className='ico';e.innerHTML=ICONS[n];return e;}
 function clone(o){return JSON.parse(JSON.stringify(o));}
+const dollarText=v=>{const t=String(v??'').trim();if(!t)return '';const n=parseNum(t);return isNaN(n)?String(v):money(n);};
+const editText=v=>{const t=String(v??'').trim();if(!t)return '';const n=parseNum(t);return isNaN(n)?String(v):String(round2(n));};
+const plainAmt=v=>{const t=String(v??'').trim();if(!t)return '';const n=parseNum(t);return isNaN(n)?String(v):n.toFixed(2);};
 function rollDue(b,key){ // bring saved due dates (YYYY-MM-DD) into the month being copied to
   const [Y,M]=key.split('-').map(Number),last=new Date(Y,M,0).getDate();
   for(const s of b.sections)for(const r of s.rows)if(/^\d{4}-\d{2}-\d{2}$/.test(r.due||'')){
-    const d=Math.min(+r.due.slice(8),last);r.due=Y+'-'+String(M).padStart(2,'0')+'-'+String(d).padStart(2,'0');}}
+    const d=Math.min(+r.due.slice(8),last);r.due=Y+'-'+String(M).padStart(2,'0')+'-'+String(d).padStart(2,'0');}
+  for(const parts of Object.values(b.plan_splits||{}))for(const q of parts)if(/^\d{4}-\d{2}-\d{2}$/.test(q.date||'')){
+    const d=Math.min(+q.date.slice(8),last);q.date=Y+'-'+String(M).padStart(2,'0')+'-'+String(d).padStart(2,'0');}}
 
 /* ===== state ===== */
 let data=null, page='budget', filter='all', selected=new Set(), dirty=false, lastSaved=null;
@@ -287,7 +307,11 @@ function normalizeBudget(b){
     kind:s.kind||(s.title==='Monthly Income'?'income':'expense'),
     debt:s.debt??((s.kind||'expense')==='expense'&&/^debt/i.test(s.title||'')),
     rows:(s.rows||[]).map(r=>Array.isArray(r)?{id:uid(),name:r[0],amount:r[1]}:{...r,id:r.id||uid(),name:r.name||'',amount:r.amount??''})}));
-  return {sections,transactions:('sections' in b&&Array.isArray(b.transactions))?b.transactions:[]};}
+  const has=k=>'sections' in b&&b[k];
+  return {sections,transactions:('sections' in b&&Array.isArray(b.transactions))?b.transactions:[],
+    deleted:Array.isArray(has('deleted'))?b.deleted:[],blocked:Array.isArray(has('blocked'))?b.blocked:[],
+    plan_order:Array.isArray(has('plan_order'))?b.plan_order:[],
+    plan_splits:(has('plan_splits')&&typeof b.plan_splits==='object'&&!Array.isArray(b.plan_splits))?b.plan_splits:{}};}
 
 function loadData(obj){
   const d={budgets:{},untracked:Array.isArray(obj.untracked)?obj.untracked:[],current:obj.current};
@@ -307,6 +331,10 @@ function loadData(obj){
 }
 
 /* ===== budget math ===== */
+function shortChoices(key){ // item names without the section; the section is added only when two items share a name
+  const rows=data.budgets[key].sections.flatMap(s=>s.rows.map(r=>({id:r.id,name:r.name||'(no name)',sec:s.title})));
+  const count={};for(const r of rows){const k=r.name.trim().toLowerCase();count[k]=(count[k]||0)+1;}
+  return rows.map(r=>({id:r.id,label:count[r.name.trim().toLowerCase()]===1?r.name:`${r.name} (${r.sec})`}));}
 function itemChoices(key){return data.budgets[key].sections.flatMap(s=>s.rows.map(r=>({id:r.id,label:s.title+' - '+r.name})));}
 function itemKind(key,id){for(const s of data.budgets[key].sections)for(const r of s.rows)if(r.id===id)return s.kind;return 'expense';}
 function signedForItem(bank,mag,kind){const inn=bank>0;return kind==='income'?(inn?mag:-mag):(inn?-mag:mag);}
@@ -367,7 +395,7 @@ function render(){
 function renderMain(){
   const main=$('#main');
   if(!data){main.replaceChildren(welcomeView());return;}
-  main.replaceChildren(page==='budget'?budgetView():transactionsView());}
+  main.replaceChildren(page==='budget'?budgetView():page==='planning'?planningView():transactionsView());}
 
 function welcomeView(){
   const found=readDraft();const draft=found&&found.dirty?found:null;
@@ -393,11 +421,11 @@ function budgetView(){
 const validDue=v=>/^\d{4}-\d{2}-\d{2}$/.test(v||'');
 function dueNote(sec,r){ // view-only line under the item name; the date is changed in the item window
   const n=h('div',{class:'duenote',dataset:{o:'due'}});
-  if(sec.kind!=='income'&&validDue(r.due))n.textContent='Due '+fmtDate(r.due);else n.hidden=true;
+  if(validDue(r.due))n.textContent=(sec.kind==='income'?'Pay date ':'Due ')+fmtDate(r.due);else n.hidden=true;
   return n;}
-function setDueNote(rid,r){
+function setDueNote(rid,r,income){
   const n=document.querySelector(`[data-rid="${rid}"] [data-o=due]`);if(!n)return;
-  if(validDue(r.due)){n.textContent='Due '+fmtDate(r.due);n.hidden=false;}else{n.textContent='';n.hidden=true;}}
+  if(validDue(r.due)){n.textContent=(income?'Pay date ':'Due ')+fmtDate(r.due);n.hidden=false;}else{n.textContent='';n.hidden=true;}}
 
 function sectionCard(sec){
   const card=h('section',{class:'card sec',dataset:{sid:sec.id}},
@@ -409,9 +437,9 @@ function sectionCard(sec){
   card.querySelector('input').value=sec.title;
   for(const r of sec.rows){
     const nameIn=h('input',{type:'text',dataset:{f:'name'},'aria-label':'Item name',autocomplete:'off'});nameIn.value=r.name;
-    const budIn=h('input',{type:'text',inputmode:'decimal',dataset:{f:'bud'},'aria-label':'Budgeted amount',autocomplete:'off',placeholder:'0.00'});budIn.value=r.amount;
+    const budIn=h('input',{type:'text',inputmode:'decimal',dataset:{f:'bud'},'aria-label':'Budgeted amount',autocomplete:'off',placeholder:'0.00'});budIn.value=dollarText(r.amount);
     card.append(h('div',{class:'item',dataset:{rid:r.id}},
-      h('div',{class:'item-top'},nameIn,h('button',{class:'x',dataset:{act:'del-item'},'aria-label':'Delete item'},'×')),
+      h('div',{class:'item-top'},nameIn,h('span',{class:'paid',dataset:{o:'paid'}},'PAID'),h('button',{class:'x',dataset:{act:'del-item'},'aria-label':'Delete item'},'×')),
       dueNote(sec,r),
       h('div',{class:'nums'},
         h('label',null,h('span',{class:'k'},'Budgeted'),budIn),
@@ -437,7 +465,8 @@ function updateComputed(){
       const row=card&&card.querySelector(`[data-rid="${r.id}"]`);
       const b=parseNum(r.amount);
       if(row){
-        $('[data-f=bud]',row).classList.toggle('bad',isNaN(b));}
+        $('[data-f=bud]',row).classList.toggle('bad',isNaN(b));
+        $('[data-o=paid]',row).hidden=!(!inc&&!isNaN(b)&&b!==0&&round2(b-act)===0);}
       if(isNaN(b)){ok=false;if(row){const e=$('[data-o=rem]',row);e.textContent='--';e.classList.remove('neg');}}
       else{bt+=b;if(row){const e=$('[data-o=rem]',row);e.textContent=money(round2(b-act));e.classList.toggle('neg',!inc&&b-act<0);}}}
     if(inc)ia+=at;else sa+=at;
@@ -466,6 +495,7 @@ function transactionsView(){
   frag.append(h('div',{class:'toolbar'},
     h('button',{class:'btn primary',dataset:{act:'upload'}},'Upload CSV'),
     h('button',{class:'btn',dataset:{act:'add-txn'}},'+ Add'),
+    h('button',{class:'btn',dataset:{act:'recent'}},'Recently deleted'+(curDeleted().length?' ('+curDeleted().length+')':'')),
     h('span',{class:'seg',role:'group','aria-label':'Show'},
       h('button',{dataset:{act:'filter',v:'all'},'aria-pressed':String(filter==='all')},'All'),
       h('button',{dataset:{act:'filter',v:'untracked'},'aria-pressed':String(filter==='untracked')},'Untracked only'))));
@@ -491,6 +521,112 @@ function transactionsView(){
         h('span',{class:'a num'},money(t.amount)))));}
   return frag;}
 
+/* ----- planning page: plan each paycheck against the bills, drag to reorder, split payments ----- */
+const curSplits=()=>curBudget().plan_splits||(curBudget().plan_splits={});
+const curOrder=()=>curBudget().plan_order||(curBudget().plan_order=[]);
+function planItems(){
+  const out=[],splits=curSplits();
+  for(const sec of curSections())for(const r of sec.rows){
+    const type=sec.kind==='income'?'Income':sec.debt?'Debt':'Expense';
+    const iso=validDue(r.due)?r.due:'',name=(r.name||'').trim()||'(no name)',parts=splits[r.id];
+    if(parts&&parts.length)parts.forEach((q,n)=>{const v=parseNum(q.amount);out.push({id:r.id+'#'+n,base:r.id,name:`${name} (${n+1} of ${parts.length})`,type,date:validDue(q.date)?q.date:iso,amount:isNaN(v)?0:v});});
+    else{const v=parseNum(r.amount);out.push({id:r.id,base:r.id,name,type,date:iso,amount:isNaN(v)?0:v});}}
+  return out;}
+function defaultPlanOrder(items){ // income with no pay date first, then by date (pay before bills on the same day)
+  const key=(it,i)=>(it.type==='Income'&&!it.date)?[0,'',0,i]:[1,it.date||'9999-99-99',it.type==='Income'?0:1,i];
+  return items.map((it,i)=>[key(it,i),it]).sort((a,b)=>{for(let k=0;k<4;k++){if(a[0][k]<b[0][k])return -1;if(a[0][k]>b[0][k])return 1;}return 0;}).map(x=>x[1]);}
+function orderedPlan(){
+  const items=planItems(),ordered=defaultPlanOrder(items),saved=curOrder();
+  if(!saved.length)return ordered;
+  const byId=Object.fromEntries(items.map(it=>[it.id,it]));
+  const result=saved.filter(i=>i in byId).map(i=>byId[i]),placed=new Set(result.map(x=>x.id));
+  for(const it of ordered){if(placed.has(it.id))continue;
+    if(it.type==='Income'&&!it.date)result.unshift(it);
+    else{const at=result.findIndex(o=>o.date&&it.date&&o.date>it.date);result.splice(at<0?result.length:at,0,it);}
+    placed.add(it.id);}
+  return result;}
+function planningView(){
+  const frag=h('div');
+  frag.append(h('p',{class:'msg'},'Drag the ☰ handle to move items up or down. Income adds to Remaining and everything after it subtracts, so you can see what each paycheck covers. Tap an item to split it into parts paid on different dates.'));
+  const list=h('div',{class:'plan'});
+  const info={};
+  for(const it of orderedPlan()){info[it.id]=it;
+    list.append(h('div',{class:'prow'+(it.type==='Income'?' inc':''),dataset:{pid:it.id}},
+      h('button',{class:'grip','aria-label':'Drag to move '+it.name},'☰'),
+      h('button',{class:'pmain',dataset:{act:'split',base:it.base}},
+        h('span',{class:'l'},h('span',{class:'d'},it.name),h('span',{class:'m'},it.type+(it.date?'  ·  '+fmtDate(it.date):''))),
+        h('span',{class:'r'},h('span',{class:'k'},it.type==='Income'?'Income':'Budgeted'),h('span',{class:'num'},(it.type==='Income'?'+':'')+money(it.amount)))),
+      h('span',{class:'prem'},h('span',{class:'k'},'Remaining'),h('span',{class:'v num',dataset:{o:'prem'}},''))));}
+  frag.append(list);
+  const summary=h('div',{class:'summary num',dataset:{o:'psum'}});frag.append(summary);
+  const recompute=()=>{let bal=0;
+    for(const row of list.children){const it=info[row.dataset.pid];bal+=it.type==='Income'?it.amount:-it.amount;
+      const e=$('[data-o=prem]',row);e.textContent=money(round2(bal));e.classList.toggle('neg',round2(bal)<0);}
+    summary.textContent='Ends with '+money(round2(bal))+' after everything in the list'+(round2(bal)<0?'  (you are short)':'');};
+  recompute();
+  let drag=null,timer=null;
+  const place=()=>{const others=[...list.children].filter(r=>r!==drag.row);let before=null;
+    for(const r of others){const b=r.getBoundingClientRect();if(drag.y<b.top+b.height/2){before=r;break;}}
+    if(drag.row.nextSibling!==before)list.insertBefore(drag.row,before);recompute();};
+  list.addEventListener('pointerdown',e=>{const g=e.target.closest('.grip');if(!g)return;
+    e.preventDefault();const row=g.closest('.prow');g.setPointerCapture(e.pointerId);
+    drag={row,y:e.clientY,id:e.pointerId};row.classList.add('drag');
+    timer=setInterval(()=>{if(!drag)return; // slowly scroll the page while a row is held near the top or bottom
+      if(drag.y<110)window.scrollBy(0,-7);else if(drag.y>innerHeight-110)window.scrollBy(0,7);else return;place();},35);});
+  list.addEventListener('pointermove',e=>{if(!drag)return;drag.y=e.clientY;place();});
+  const end=()=>{if(!drag)return;clearInterval(timer);drag.row.classList.remove('drag');drag=null;
+    curOrder().splice(0,curOrder().length,...[...list.children].map(r=>r.dataset.pid));markDirty();};
+  list.addEventListener('pointerup',end);list.addEventListener('pointercancel',end);
+  return frag;}
+function planText(rid){
+  const parts=curSplits()[rid];
+  if(parts&&parts.length)return 'Split into '+parts.length+' payments:  '+parts.map(q=>money(parseNum(q.amount))+(validDue(q.date)?' on '+fmtDate(q.date):' (no date)')).join(';  ');
+  const f=findRowById(rid);return 'One payment'+(f&&validDue(f.row.due)?' on '+fmtDate(f.row.due):'')+'.';}
+function findRowById(rid){for(const s of curSections()){const row=s.rows.find(r=>r.id===rid);if(row)return {sec:s,row};}return null;}
+function putInOrder(base,parts){
+  const order=curOrder(),old=order.filter(i=>i===base||i.startsWith(base+'#'));if(!old.length)return;
+  const at=order.indexOf(old[0]),rest=order.filter(i=>!old.includes(i));
+  const ids=parts.length?parts.map((_,n)=>base+'#'+n):[base];
+  if(!parts.length)rest.splice(at,0,...ids);
+  else{const dates={};for(const it of planItems())dates[it.id]=it.date;
+    const idx=ids.map((_,n)=>n).sort((a,b)=>{const x=parts[a].date||'9999',y=parts[b].date||'9999';return x<y?-1:x>y?1:a-b;});
+    for(const n of idx){const when=parts[n].date;let spot;
+      if(when){spot=rest.findIndex(o=>dates[o]&&dates[o]>when);if(spot<0)spot=rest.length;}else spot=Math.min(at,rest.length);
+      rest.splice(spot,0,ids[n]);}}
+  order.splice(0,order.length,...rest);}
+function splitSheet(base){
+  const f=findRowById(base);if(!f)return;
+  const budget=(()=>{const v=parseNum(f.row.amount);return isNaN(v)?0:v;})(),own=validDue(f.row.due)?f.row.due:'';
+  const existing=curSplits()[base];
+  let entries=existing?existing.map(q=>({amount:q.amount||'',date:validDue(q.date)?q.date:''})):
+    (()=>{const a=round2(budget/2);return [{amount:budget?a.toFixed(2):'',date:own},{amount:budget?round2(budget-a).toFixed(2):'',date:''}];})();
+  openSheet(close=>{
+    const box=h('div'),sum=h('p',{class:'msg num'}),err=h('p',{class:'err',role:'alert'});
+    const upd=()=>{const tot=round2(entries.reduce((n,e)=>n+(parseNum(e.amount)||0),0)),left=round2(budget-tot);
+      sum.textContent=left===0?'Parts add up to '+money(tot):left>0?`Parts add up to ${money(tot)}  -  ${money(left)} still to assign`:`Parts add up to ${money(tot)}  -  ${money(-left)} over the budget`;
+      sum.style.color=left===0?'#1e9e5a':'var(--bad,#c0392b)';};
+    const draw=()=>{box.replaceChildren(...entries.map((e,n)=>{
+      const a=h('input',{type:'text',inputmode:'decimal',autocomplete:'off',placeholder:'0.00','aria-label':'Part '+(n+1)+' amount'});a.value=e.amount;
+      const d=h('input',{type:'date','aria-label':'Part '+(n+1)+' date'});d.value=e.date;
+      a.addEventListener('input',()=>{e.amount=a.value;upd();});d.addEventListener('change',()=>{e.date=d.value;});
+      return h('div',{class:'part'},h('span',{class:'k'},'Part '+(n+1)),a,d,
+        entries.length>1?h('button',{type:'button',class:'x','aria-label':'Remove part',onclick:()=>{entries.splice(n,1);draw();}},'×'):h('span'));}));upd();};
+    draw();
+    const save=async()=>{
+      const parts=[];
+      for(const e of entries){const v=parseNum(e.amount);
+        if(isNaN(v)){err.textContent='Please enter each amount as a number, like 250.00.';return;}
+        if(round2(v)<=0){err.textContent='Every part needs an amount above zero. Use the × to remove a part you do not need.';return;}
+        parts.push({amount:round2(v).toFixed(2),date:e.date||''});}
+      const total=round2(parts.reduce((n,q)=>n+parseFloat(q.amount),0));
+      if(round2(total-budget)!==0&&!await confirmSheet("Parts don't match the budget",`The parts add up to ${money(total)} but the budget is ${money(budget)}.\n\nSave anyway?`,'Save anyway'))return;
+      curSplits()[base]=parts;putInOrder(base,parts);close(true);markDirty();render();};
+    return h('div',null,h('h3',null,(f.row.name||'(no name)')),h('p',{class:'msg'},`Budgeted ${money(budget)}.  Enter each part and the date it will be paid.`),
+      box,sum,err,
+      h('div',{class:'row'},h('button',{class:'btn',onclick:()=>{const left=round2(budget-entries.reduce((n,e)=>n+(parseNum(e.amount)||0),0));entries.push({amount:left>0?left.toFixed(2):'',date:''});draw();}},'+ Add part'),
+        existing?h('button',{class:'btn',onclick:()=>{putInOrder(base,[]);delete curSplits()[base];close(true);markDirty();render();}},'Pay in one go'):null),
+      h('div',{class:'row'},h('button',{class:'btn',onclick:()=>close(undefined)},'Cancel'),h('span',{class:'spacer'}),h('button',{class:'btn primary',onclick:save},'Save')));});}
+
 /* ===== forms ===== */
 function monthSelect(selectedKey){
   const s=h('select',null,...sortedKeys().map(k=>h('option',{value:k},labelFor(k))));s.value=selectedKey;return s;}
@@ -506,20 +642,20 @@ function itemPicker(monthEl,{initial=null,required=false,startWithFirst=false}={
   let chosen=null;
   const show=()=>{
     const q=input.value.trim().toLowerCase();
-    const ch=itemChoices(monthEl.value).filter(c=>c.label.toLowerCase().includes(q));
+    const ch=shortChoices(monthEl.value).filter(c=>c.label.toLowerCase().includes(q));
     list.replaceChildren(...(ch.length?ch.map(c=>h('button',{type:'button',onclick:()=>{chosen=c.id;input.value=c.label;list.hidden=true;}},c.label)):[h('div',{class:'none'},'No items match')]));
     list.hidden=false;};
-  const setItem=id=>{const c=itemChoices(monthEl.value).find(x=>x.id===id);chosen=c?c.id:null;input.value=c?c.label:'';list.hidden=true;};
+  const setItem=id=>{const c=shortChoices(monthEl.value).find(x=>x.id===id);chosen=c?c.id:null;input.value=c?c.label:'';list.hidden=true;};
   input.addEventListener('input',()=>{chosen=null;show();});
   input.addEventListener('focus',show);
   monthEl.addEventListener('change',()=>{chosen=null;input.value='';list.hidden=true;});
-  const first=itemChoices(monthEl.value)[0];
+  const first=shortChoices(monthEl.value)[0];
   setItem(initial||(startWithFirst&&first?first.id:null));
   const value=()=>{ // an item id, null when empty, undefined when it matches nothing
     const t=input.value.trim().toLowerCase();
-    if(chosen&&itemChoices(monthEl.value).some(c=>c.id===chosen&&c.label.toLowerCase()===t))return chosen;
+    if(chosen&&shortChoices(monthEl.value).some(c=>c.id===chosen&&c.label.toLowerCase()===t))return chosen;
     if(!t)return null;
-    const all=itemChoices(monthEl.value),exact=all.filter(c=>c.label.toLowerCase()===t);
+    const all=shortChoices(monthEl.value),exact=all.filter(c=>c.label.toLowerCase()===t);
     if(exact.length)return exact[0].id;
     const part=all.filter(c=>c.label.toLowerCase().includes(t));
     return part.length===1?part[0].id:undefined;};
@@ -550,7 +686,8 @@ function txnDialog({txn=null,presetItem=null}={}){
       close({date:date.value,description:desc.value.trim(),amount:a,month:month.value,item_id:itemId});};
     return h('form',{onsubmit:e=>{e.preventDefault();save();}},
       h('h3',null,txn?'Edit transaction':'Add transaction'),
-      imported?h('div',{class:'info'},'From your bank: '+money(txn.bank_amount)+(txn.category?'   |   '+txn.category:'')):null,
+      imported?h('div',{class:'info'},'From your bank: '+money(txn.bank_amount)):null,
+      (imported&&txn.extended)?h('div',{class:'f'},h('span',null,'Extended description'),h('div',{class:'ext'},txn.extended)):null,
       h('label',{class:'f'},h('span',null,'Date'),date),
       h('label',{class:'f'},h('span',null,'Description'),desc),
       h('label',{class:'f'},h('span',null,imported?'Amount ($, no sign)':'Amount ($)'),amt),
@@ -589,13 +726,42 @@ async function editTxn(id){
   const t=findTxn(id);if(!t)return;
   const res=await txnDialog({txn:t});if(!res)return;
   if(res.remove){
-    if(!await confirmSheet('Delete transaction','Delete this transaction?','Delete',true))return;
-    removeTxn(t);selected.delete(id);markDirty();render();return;}
+    if(!await confirmSheet('Delete transaction','Delete this transaction?\n\nIt will stay in Recently deleted so you can restore it.','Delete',true))return;
+    trashTxns([t]);selected.delete(id);markDirty();render();return;}
   t.date=res.date;t.description=res.description;
   if(res.item_id==null){if(!('bank_amount' in t))t.amount=res.amount;unallocateTxn(t);markDirty();render();return;}
   if('bank_amount' in t)placeTxn(t,res.month,res.item_id,Math.abs(res.amount));
   else{t.amount=res.amount;placeTxn(t,res.month,res.item_id);}
   tellIfElsewhere(res.month,1);markDirty();render();}
+/* Recently deleted: per month. A fingerprint list keeps deleted imports from coming back with a new CSV. */
+const curDeleted=()=>curBudget().deleted||(curBudget().deleted=[]);
+const curBlocked=()=>curBudget().blocked||(curBudget().blocked=[]);
+const fingerprint=t=>{const amt=round2('bank_amount' in t?t.bank_amount:t.amount);return t.source_id?{sid:t.source_id,amount:amt}:{date:t.date,amount:amt,description:t.description};};
+function trashTxns(list){
+  for(const t of list){
+    removeTxn(t);t.deleted_from=t.item_id;t.deleted_at=new Date().toISOString();curDeleted().push(t);
+    if('bank_amount' in t||t.source_id)curBlocked().push(fingerprint(t));}}
+function restoreDeleted(id){
+  const list=curDeleted(),i=list.findIndex(t=>t.id===id);if(i<0)return;
+  const t=list.splice(i,1)[0];const old=t.deleted_from;delete t.deleted_from;delete t.deleted_at;
+  if('bank_amount' in t||t.source_id){const key=JSON.stringify(fingerprint(t));const b=curBlocked(),j=b.findIndex(m=>JSON.stringify(m)===key);if(j>=0)b.splice(j,1);}
+  if(old&&itemKind(data.current,old)&&curSections().some(s=>s.rows.some(r=>r.id===old))){t.item_id=old;curBudget().transactions.push(t);}
+  else{if('bank_amount' in t)t.amount=t.bank_amount;t.item_id=null;data.untracked.push(t);}}
+function recentlyDeletedSheet(){
+  openSheet(close=>{
+    const list=[...curDeleted()].sort((x,y)=>(y.deleted_at||'').localeCompare(x.deleted_at||''));
+    return h('div',null,h('h3',null,'Recently deleted - '+labelFor(data.current)),
+      h('p',{class:'msg'},"Deleted transactions wait here until you empty this list. Uploading a CSV again will not bring them back."),
+      list.length?list.map(t=>h('div',{class:'txn',style:'margin-bottom:8px'},
+        h('div',{class:'main',style:'padding-left:12px;cursor:default'},
+          h('span',{class:'l'},h('span',{class:'d'},t.description||'(no description)'),h('span',{class:'m'},fmtDate(t.date))),
+          h('span',{class:'a num'},money(t.amount))),
+        h('button',{class:'btn small',style:'align-self:center;margin:0 10px',onclick:()=>{restoreDeleted(t.id);markDirty();render();}},'Restore'))):
+        h('div',{class:'empty'},'Nothing deleted this month.'),
+      h('div',{class:'row'},
+        list.length?h('button',{class:'btn danger',onclick:async()=>{
+          if(await confirmSheet('Empty recently deleted',`Permanently remove ${list.length} transaction(s)?\n\nThis can't be undone. A new CSV still won't add them back.`,'Empty',true)){curDeleted().length=0;markDirty();render();}}},'Empty'):null,
+        h('span',{class:'spacer'}),h('button',{class:'btn',onclick:()=>close()},'Close')));},{live:true,noFocus:true});}
 async function allocateSelected(){
   const ids=[...selected];if(!ids.length)return;
   const res=await allocateDialog(ids.length);if(!res)return;
@@ -603,8 +769,8 @@ async function allocateSelected(){
   selected=new Set();tellIfElsewhere(res.month,ids.length);markDirty();render();}
 async function deleteSelected(){
   const ids=[...selected];if(!ids.length)return;
-  if(!await confirmSheet('Delete transactions',`Delete ${ids.length} selected transaction(s)?`,'Delete',true))return;
-  for(const id of ids){const t=findTxn(id);if(t)removeTxn(t);}
+  if(!await confirmSheet('Delete transactions',`Delete ${ids.length} selected transaction(s)?\n\nThey will stay in Recently deleted so you can restore them.`,'Delete',true))return;
+  trashTxns(ids.map(findTxn).filter(Boolean));
   selected=new Set();markDirty();render();}
 
 /* item popup: the transactions under one budget item */
@@ -622,13 +788,15 @@ function itemSheet(itemId){
     const debtBox=(isDebt&&rowObj)?h('div',{class:'dbox'},h('h4',null,'Debt details'),
       h('div',{class:'three'},box('balance','Balance','0.00'),box('min_payment','Min pay','0.00'),box('rate','Rate %','0.0'))):null;
     let dueBox=null;
-    if(rowObj&&!isInc){
-      const di=h('input',{type:'date','aria-label':'Due date'});di.value=validDue(rowObj.due)?rowObj.due:'';
-      di.addEventListener('change',()=>{rowObj.due=di.value;setDueNote(itemId,rowObj);markDirty();});
-      dueBox=h('label',{class:'f'},h('span',{class:'k'},'Due date'),di);}
+    if(rowObj){
+      const di=h('input',{type:'date','aria-label':isInc?'Pay date':'Due date'});di.value=validDue(rowObj.due)?rowObj.due:'';
+      di.addEventListener('change',()=>{rowObj.due=di.value;setDueNote(itemId,rowObj,isInc);markDirty();});
+      dueBox=h('label',{class:'f'},h('span',{class:'k'},isInc?'Pay date':'Due date'),di);}
     return h('div',null,h('h3',null,name),
       h('p',{class:'msg num'},`${list.length} transaction(s)  \u00B7  Actual ${money(round2(total))}`),
       dueBox,debtBox,
+      rowObj?h('div',{class:'dbox'},h('h4',null,'Payment plan'),h('p',{class:'msg'},planText(itemId)),
+        h('button',{class:'btn small',onclick:()=>splitSheet(itemId)},'Plan payments...')):null,
       list.length?list.map(t=>h('div',{class:'txn',style:'margin-bottom:8px'},
         h('button',{class:'main',style:'padding-left:12px',onclick:()=>editTxn(t.id)},
           h('span',{class:'l'},h('span',{class:'d'},t.description||'(no description)'),h('span',{class:'m'},fmtDate(t.date))),
@@ -690,7 +858,7 @@ async function newMonth(){
       h('label',{class:'chkline',for:'copyChk'},cp,h('span',null,'Copy sections, items and amounts from '+labelFor(source))),err,
       h('div',{class:'row'},h('button',{type:'button',class:'btn',onclick:()=>close(undefined)},'Cancel'),h('button',{type:'submit',class:'btn primary'},'Create')));});
   if(!res)return;
-  if(res.copy){const nb=clone(data.budgets[source]);nb.transactions=[];rollDue(nb,res.key);data.budgets[res.key]=nb;}else data.budgets[res.key]=defaultBudget();
+  if(res.copy){const nb=clone(data.budgets[source]);nb.transactions=[];nb.deleted=[];nb.blocked=[];rollDue(nb,res.key);data.budgets[res.key]=nb;}else data.budgets[res.key]=defaultBudget();
   data.current=res.key;selected=new Set();markDirty();render();}
 
 async function resetMonth(){
@@ -699,7 +867,7 @@ async function resetMonth(){
   const prev=keys[i-1],n=curBudget().transactions.length;
   const ok=await confirmSheet('Reset budget',`Reset ${labelFor(data.current)} using ${labelFor(prev)}?\n\nAll sections, items and amounts in ${labelFor(data.current)} will be replaced with ${labelFor(prev)}'s.`+(n?`\n\nIts ${n} transaction(s) will also be deleted.`:'')+`\n\nThis can't be undone.`,'Reset',true);
   if(!ok)return;
-  const fresh=clone(data.budgets[prev]);fresh.transactions=[];rollDue(fresh,data.current);data.budgets[data.current]=fresh;markDirty();render();}
+  const fresh=clone(data.budgets[prev]);fresh.transactions=[];fresh.deleted=curBudget().deleted||[];fresh.blocked=curBudget().blocked||[];rollDue(fresh,data.current);data.budgets[data.current]=fresh;markDirty();render();}
 async function deleteMonth(){
   if(Object.keys(data.budgets).length<=1){await infoSheet("Can't delete",'You need at least one budget. Create another month first, then delete this one.');return;}
   const n=curBudget().transactions.length;
@@ -746,24 +914,29 @@ function parseBankCsv(rows){
     if(!when||isNaN(amount)){bad++;continue;}
     if(amount===0)continue;
     parsed.push({date:when,amount,description:col(r,'description')||col(r,'extended description')||'(no description)',
-      category:col(r,'transaction category'),source_id:col(r,'transaction id')||col(r,'reference number')});}
+      category:col(r,'transaction category'),extended:col(r,'extended description')||col(r,'extended details'),source_id:col(r,'transaction id')||col(r,'reference number')});}
   return {parsed,pending,bad};}
 function importTransactions(parsed){
-  const pairs=new Set(),ids=new Set(),prints=new Set();
+  const pairs=new Set(),ids=new Set(),prints=new Set(),byPair={},byPrint={};
   for(const pool of pools())for(const t of pool){
     const sid=t.source_id,bank=round2('bank_amount' in t?t.bank_amount:t.amount);
-    if(sid){pairs.add(sid+'|'+bank);ids.add(sid);}
-    else if('bank_amount' in t)prints.add([t.date,bank,t.description].join('|'));}
-  let added=0,dupes=0,changed=0;
+    if(sid){pairs.add(sid+'|'+bank);ids.add(sid);byPair[sid+'|'+bank]=t;}
+    else if('bank_amount' in t){const fp=[t.date,bank,t.description].join('|');prints.add(fp);byPrint[fp]=t;}}
+  const blockedPairs=new Set(),blockedPrints=new Set(); // ones you deleted: never added again
+  for(const b of Object.values(data.budgets))for(const m of (b.blocked||[])){
+    if('sid' in m)blockedPairs.add(m.sid+'|'+round2(m.amount));else blockedPrints.add([m.date,round2(m.amount),m.description].join('|'));}
+  let added=0,dupes=0,changed=0,blocked=0,filled=0;
   for(const p of parsed){
     const sid=p.source_id,amount=round2(p.amount);
+    const fpKey=[p.date,amount,p.description].join('|');
+    if((sid&&blockedPairs.has(sid+'|'+amount))||(!sid&&blockedPrints.has(fpKey))){blocked++;continue;}
     if(sid){
-      if(pairs.has(sid+'|'+amount)){dupes++;continue;}
+      if(pairs.has(sid+'|'+amount)){dupes++;const old=byPair[sid+'|'+amount];if(old&&p.extended&&!old.extended){old.extended=p.extended;filled++;}continue;}
       if(ids.has(sid))changed++;
       pairs.add(sid+'|'+amount);ids.add(sid);}
-    else{const fp=[p.date,amount,p.description].join('|');if(prints.has(fp)){dupes++;continue;}prints.add(fp);}
-    data.untracked.push({id:uid(),date:p.date,description:p.description,amount,bank_amount:amount,item_id:null,category:p.category,source_id:sid});added++;}
-  return {added,dupes,changed};}
+    else{if(prints.has(fpKey)){dupes++;const old=byPrint[fpKey];if(old&&p.extended&&!old.extended){old.extended=p.extended;filled++;}continue;}prints.add(fpKey);}
+    data.untracked.push({id:uid(),date:p.date,description:p.description,amount,bank_amount:amount,item_id:null,category:p.category,extended:p.extended||'',source_id:sid});added++;}
+  return {added,dupes,changed,blocked,filled};}
 function readFile(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result));r.onerror=()=>rej(r.error);r.readAsText(file);});}
 
 async function onCsvChosen(file){
@@ -777,9 +950,12 @@ async function onCsvChosen(file){
     else lines.push('No new transactions were added.');
     if(r.dupes)lines.push(`Skipped ${r.dupes} duplicate(s): same Transaction ID and amount as one already imported.`);
     if(r.changed)lines.push(`${r.changed} had a Transaction ID that was already imported but a different amount, so they were added as new. Compare them with the earlier ones.`);
+    if(r.filled)lines.push(`Added the Extended Description to ${r.filled} transaction(s) imported earlier.`);
+    else if(!parsed.some(p=>p.extended))lines.push("This file has no Extended Description column (or it's empty), so none could be added to earlier transactions.");
+    if(r.blocked)lines.push(`Skipped ${r.blocked} you deleted earlier (see Recently deleted).`);
     if(pending)lines.push(`Skipped ${pending} that aren't posted yet.`);
     if(bad)lines.push(`Skipped ${bad} row(s) with a date or amount I couldn't read.`);
-    if(r.added)markDirty();
+    if(r.added||r.filled)markDirty();
     page='transactions';render();
     await infoSheet('Upload finished',lines.join('\n\n'));
   }catch(e){await infoSheet("Couldn't read the file",e.message||String(e));}}
@@ -828,7 +1004,7 @@ $('#csvPick').addEventListener('change',e=>{const f=e.target.files[0];if(f)onCsv
 $('#monthSel').addEventListener('change',e=>{data.current=e.target.value;selected=new Set();persistLast();render();window.scrollTo(0,0);});
 for(const t of document.querySelectorAll('.tab'))t.addEventListener('click',()=>{
   if(!data||t.dataset.tab===page)return;
-  const dir=t.dataset.tab==='transactions'?1:-1;page=t.dataset.tab;render();window.scrollTo(0,0);
+  const order=['budget','transactions','planning'];const dir=order.indexOf(t.dataset.tab)>order.indexOf(page)?1:-1;page=t.dataset.tab;render();window.scrollTo(0,0);
   if(!matchMedia('(prefers-reduced-motion: reduce)').matches&&main.animate)
     main.animate([{transform:`translateX(${dir*40}px)`,opacity:0},{transform:'none',opacity:1}],{duration:260,easing:'cubic-bezier(.2,.7,.2,1)'});});
 
@@ -839,8 +1015,10 @@ main.addEventListener('input',e=>{
   const card=t.closest('[data-sid]');if(!card)return;
   if(f==='title'){const s=curSections().find(x=>x.id===card.dataset.sid);if(s){s.title=t.value;markDirty();}return;}
   const loc=findRow(card.dataset.sid,t.closest('[data-rid]').dataset.rid);if(!loc||!loc.row)return;
-  if(f==='name')loc.row.name=t.value;else if(f==='bud')loc.row.amount=t.value;else if(ROW_EXTRA.includes(f))loc.row[f]=t.value;
+  if(f==='name')loc.row.name=t.value;else if(f==='bud')loc.row.amount=plainAmt(t.value);else if(ROW_EXTRA.includes(f))loc.row[f]=t.value;
   markDirty();});
+main.addEventListener('focusin',e=>{const t=e.target;if(t.dataset&&t.dataset.f==='bud')t.value=editText(t.value);});
+main.addEventListener('focusout',e=>{const t=e.target;if(t.dataset&&t.dataset.f==='bud')t.value=dollarText(t.value);});
 main.addEventListener('change',e=>{
   const t=e.target,f=t.dataset.f;
   if(f==='bud'||ROW_EXTRA.includes(f))updateComputed();
@@ -857,8 +1035,10 @@ main.addEventListener('click',e=>{
       const el=document.querySelector(`[data-rid="${r.id}"] [data-f=name]`);if(el){el.focus();el.select();}break;}
     case 'del-item':deleteItem(card.dataset.sid,row.dataset.rid);break;
     case 'view-item':itemSheet(row.dataset.rid);break;
+    case 'split':splitSheet(b.dataset.base);break;
     case 'upload':$('#csvPick').value='';$('#csvPick').click();break;
     case 'add-txn':addTxn();break;
+    case 'recent':recentlyDeletedSheet();break;
     case 'filter':filter=b.dataset.v;renderMain();break;
     case 'edit-txn':editTxn(tx.dataset.tid);break;
     case 'allocate':allocateSelected();break;
