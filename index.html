@@ -11,6 +11,7 @@
 <meta name="theme-color" content="#0B1B45">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#0B1B45">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <style>
 /* Layout: navy sticky header (file buttons, month, tabs), scrolling cards, navy pinned footer with the two leftover figures. */
@@ -165,7 +166,10 @@ input.bad{border-color:var(--bad)!important}
 .metrics small{display:block;font-size:10.5px;letter-spacing:.09em;color:var(--navy-text);font-weight:600}
 .metrics b{font-size:21px;font-variant-numeric:tabular-nums}
 .metrics b.pos{color:var(--on-navy-good)} .metrics b.neg{color:var(--on-navy-bad)}
-.no-data .bottom,.no-data .monthrow,.no-data .tabs{display:none}
+.no-data .monthrow,.no-data .tabs{display:none}
+.no-data .bottom>*{display:none}
+.no-data .bottom{min-height:max(28px,env(safe-area-inset-bottom,0px))}
+.no-data #main{padding-bottom:calc(60px + env(safe-area-inset-bottom,0px))}
 .no-data main{padding-bottom:40px}
 
 /* sheets */
@@ -191,7 +195,8 @@ input.bad{border-color:var(--bad)!important}
 .check.play path{animation:checkDraw .4s ease-out forwards}
 @keyframes checkDraw{to{stroke-dashoffset:0}}
 @keyframes checkFade{0%,72%{opacity:1}100%{opacity:0}}
-#splash{position:fixed;inset:0;z-index:100;background:#0B1B45;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;animation:splashOut .45s ease 2.6s forwards}
+html:has(#splash){background:#0B1B45}
+#splash{position:fixed;left:0;right:0;top:0;bottom:calc(-1 * env(safe-area-inset-bottom,0px));min-height:100lvh;z-index:100;background:#0B1B45;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;animation:splashOut .45s ease 2.6s forwards}
 #splash img{width:168px;height:168px;display:block;opacity:0;animation:fadeIn .9s ease .1s forwards}
 #splash p{margin:0;color:#fff;font-weight:700;font-size:26px;letter-spacing:.2px;opacity:0;animation:fadeIn .6s ease 1s forwards}
 @keyframes fadeIn{to{opacity:1}}
