@@ -12,6 +12,10 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="apple-touch-icon.png">
 <meta name="theme-color" content="#0B1B45">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="WHYBudget">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <style>
 /* Layout: navy sticky header (file buttons, month, tabs), scrolling cards, navy pinned footer with the two leftover figures. */
@@ -33,7 +37,8 @@
   --overlay:rgba(0,0,0,.65); color-scheme:dark}
 
 *{box-sizing:border-box}
-body{background:var(--bg);color:var(--text);font:15px/1.4 var(--font);-webkit-text-size-adjust:100%;min-height:100%}
+html{background:#0B1B45;min-height:100%}
+body{background:var(--bg);color:var(--text);font:15px/1.4 var(--font);-webkit-text-size-adjust:100%;min-height:100vh;min-height:100lvh}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--navy);z-index:30}
 button,input,select,textarea{font:inherit;color:inherit}
 .wrap{max-width:760px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
@@ -168,7 +173,7 @@ input.bad{border-color:var(--bad)!important}
 .metrics b.pos{color:var(--on-navy-good)} .metrics b.neg{color:var(--on-navy-bad)}
 .no-data .monthrow,.no-data .tabs{display:none}
 .no-data .bottom>*{display:none}
-.no-data .bottom{min-height:max(28px,env(safe-area-inset-bottom,0px))}
+.no-data .bottom{min-height:max(28px,env(safe-area-inset-bottom,0px));bottom:-1px}
 .no-data #main{padding-bottom:calc(60px + env(safe-area-inset-bottom,0px))}
 .no-data main{padding-bottom:40px}
 
